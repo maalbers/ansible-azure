@@ -1,0 +1,581 @@
+---
+- hosts: localhost
+  connection: local
+  gather_facts: no
+  tasks:
+#    - name: "Destroy Azure Deploy  Resource group {{ resource_group_name }}"
+#      azure_rm_deployment:
+ #       state: absent
+ #       subscription_id: "{{ subscriptionID }}"
+ #       resource_group_name: "{{ resource_group_name }}"
+#        location: "{{ region }}"
+################################################
+####  Create basic infra components
+## https://blogs.technet.microsoft.com/stefan_stranger/2016/10/21/using-the-azure-arm-rest-apin-get-access-token/
+################################################
+    - debug: msg="Provisioning with ad_user {{ ad_username }} "
+    - name: "Create Azure Deploy {{ resource_group_name }}"
+      azure_rm_deployment:
+        deployment_mode: incremental
+
+        state: present
+        ad_user: "{{ ad_username }}"
+        password: "{{ ad_password }}"
+        secret: "{{ secret }}"
+        tenant: "{{ tenant }}"
+        client_id: "{{ client_id }}"
+        subscription_id: "{{ subscriptionID }}"
+        resource_group_name: "{{ resource_group_name }}"
+        template_link: "{{ template_root | default('https://raw.githubusercontent.com/ivanthelad/ansible-azure/master/') }}/infra-avail.json"
+      #  template_link: 'https://raw.githubusercontent.com/ivanthelad/ansible-azure/master/infra-avail.json'
+      #  template_link: 'file://Users/imckinle/Projects/openshift/azure-ansible/ansible-azure/infra-avail.json'
+        parameters:
+          dnsNameAPI:
+            value: "master-{{ resource_group_name }}"
+        location: "{{ region }}"
+      register: infrastruct
+
+    - debug: msg="the value of infrastruct  {{ infrastruct }}"
+    - debug: msg="the value of infrastruct {{ infrastruct }}"
+    - set_fact:
+        publicjumpip: "{{ infrastruct.deployment.outputs.apiip.value }}"
+        publicjumpdns: "{{ infrastruct.deployment.outputs.apidns.value }}"
+        routerpublicip: "{{ infrastruct.deployment.outputs.routerip.value }}"
+        publicjumpip: "{{ infrastruct.deployment.outputs.jumphostip.value }}"
+    - debug: msg="public api  {{ publicjumpip }}"
+    - debug: msg="public dns {{ publicjumpdns }}"
+    - debug: msg="router ip {{ routerpublicip }}"
+ #   - debug: msg=" jumphostip {{ jumphostip }}"
+
+    ################################################
+ #### Create the jump host
+      ################################################
+
+
+  # - set_fact:
+  #      publicjumpdns: "{{ azure.results[0].deployment.instances[0].ips[0].dns_settings.fqdn }}"
+    #    publicjumpip: "{{ azure.results[0].deployment.instances[0].ips[0].public_ip }}"
+
+
+
+################################################
+####  Create basic humphost node, this exposes 8443 and 22 as a public ports on a public ip , in future this will be a jump host and also entry point for the masters
+###   we use this node to jump into the other nodes
+################################################
+    - name: Create Jumphost Deployment
+      with_dict: "{{ jumphost }}"
+      azure_rm_deployment:
+        deployment_mode: incremental
+        state: present
+        ad_user: "{{ ad_username }}"
+        password: "{{ ad_password }}"
+        secret: "{{ secret }}"
+        tenant: "{{ tenant }}"
+        client_id: "{{ client_id }}"
+        subscription_id: "{{ subscriptionID }}"
+        resource_group_name: "{{ resource_group_name }}"
+        location: "{{ region }}"
+        #### We add it to the master subnet but really don't matter
+        deployment_name: "{{ item.value.name }}"
+        parameters:
+          image:
+            value: "{{ image }}"
+          subnetName:
+            value: masterSubnet
+          virtualNetworkName:
+            value: openshiftVnet
+          adminUsername:
+            value: "{{ adminUsername }}"
+          vmSize:
+            value: "{{ item.value.machinesize | default('Standard_D2_v2') }}"
+          adminPassword:
+            value: "{{ adminPassword }}"
+          vmName:
+            value:  "{{ item.value.name }}"
+          tags:
+            value: "{{ item.value.tags }}"
+          sshKeyData:
+            value: "{{ sshkey }}"
+## ip address has to be created before hand  for some reason i cannot fathom at the mo
+          publicip:
+            value: "jumphostip"
+          dataDiskSize:
+            value: "{{ item.value.datadisksize | default('60') }}"
+          storageType:
+            value: "{{ item.value.storagtype | default('Standard_LRS') }}"
+
+        template_link: "{{ template_root | default('https://raw.githubusercontent.com/ivanthelad/ansible-azure/master/') }}/jumphost-avail.json"
+        #template_link: 'https://raw.githubusercontent.com/ivanthelad/ansible-azure/master/jumphost-avail.json'
+      register: azure_async
+      async: 7200
+      poll: 0
+    - name: Wait for jump instance creation to complete
+      async_status: jid={{ item.ansible_job_id }}
+      register: azure
+      until: azure.finished
+      retries: 320
+      with_items: "{{ azure_async.results }}"
+    - debug: msg="the value of azure  {{ azure }}"
+    - debug: msg="the value of azure_async {{ azure_async }}"
+    - debug: msg="the value of dddd {{ azure.results[0].deployment.instances }}"
+    - debug: msg="the value of dddd {{ azure.results[0].deployment.instances[0].ips[0].public_ip }}"
+
+    - name: Add new instance to host group
+      add_host: name={{  azure.results[0].deployment.instances[0].ips[0].public_ip }} groups=azure_vms
+  #    with_items: azure.results[0].deployment.instances[0]
+#      add_host: hostname={{ item['ips'][0].public_ip }} groupname=azure_vms
+#      with_items: azure.results[0].deployment.instances
+    - name: Scan the public key for master and added it to known hosts
+      debug: "arggg  {{ item }}  "
+      with_items: "{{ groups['azure_vms'] }}"
+
+    - name: Scan the public key for master and added it to known hosts
+      shell: "ssh-keyscan -H -T 10  {{ item }} >> ~/.ssh/known_hosts "
+      with_items: "{{ groups['azure_vms'] }}"
+
+
+
+      ################################################
+      ####  Only setting these values so we can manually look up. bit of a hack
+      ################################################
+
+################################################
+####  Adding the jump host to our local know hosts
+################################################
+#- hosts: localhost
+#  connection: local#
+#  tasks:
+#    - debug: msg="the value of dddd {{ azure_vms }}"
+#    - name: Scan the public key for master and added it to known hosts#
+#      debug: "arggg  {{ item }}  "
+#      with_items: groups['azure_vms']
+#
+#    - name: Scan the public key for master and added it to known hosts
+#      shell: "ssh-keyscan -H -T 10  {{ item }} >> ~/.ssh/known_hosts "
+#      with_items: groups['azure_vms']
+
+
+
+################################################
+#### Generating key on jump host. This then download locally to /tmp//id_rsa.tmp and shared to other newly create azure hosts on initialization
+#### Rather complicated way but it avoids opening port 22 on all hosts
+################################################
+- hosts: azure_vms
+  vars:
+    publicjumpdns: "{{ hostvars['localhost']['publicjumpdns']}}"
+    publicjumpip: "{{ hostvars['localhost']['publicjumpip']}}"
+
+  user: "{{ adminUsername }}"
+  tasks:
+    - name: Wait for SSH to come up
+      wait_for: port=22 timeout=2000 state=started
+    - name: echo the hostname of the vm
+      shell: hostname
+    - name: Generating RSA key for root
+      user: name={{ adminUsername }} generate_ssh_key=yes
+    - name: Downloading pub key
+      fetch: src=/home/{{ adminUsername }}/.ssh/id_rsa.pub dest=/tmp/id_rsa.tmp flat=yes
+    - authorized_key: user="{{ adminUsername }}" key="{{ lookup('file', '/tmp/id_rsa.tmp') }}"
+
+
+
+
+################################################
+#### because
+################################################
+- hosts: azure_vms
+  user: "{{ adminUsername }}"
+  vars:
+    contents: "{{ lookup('file', '/tmp/id_rsa.tmp') }}"
+  tasks:
+    - debug: msg="the value of foo.txt is {{ contents }}"
+### infra here
+
+
+
+#- hosts: localhost#
+#  connection: localhost
+#  roles:
+#     - { role: tagvm, machines: "{{ jumphost }}" }
+
+
+################################################
+####  Create basic Master node, this exposes 8443 and 22 as a public ports on a public ip , in future this will be a jump host
+###   we use this node to jump into the other nodes
+################################################
+################################################
+#### Creating the masters nodes. these sit behind the jump host. no need to open public ports
+####Todo, dyncamically add the list of infra nodes to group
+################################################
+- hosts: localhost
+  strategy: free
+  serial: 20
+  connection: local
+  vars:
+      masterkey: "{{ lookup('file', '/tmp/id_rsa.tmp') }}"
+  gather_facts: no
+  tasks:
+    - name: Create Masters Deploy
+      async: 7200
+      poll: 0
+      when: masters is defined
+      with_dict: "{{ masters }}"
+      delay: 30
+      retries: 1
+      azure_rm_deployment:
+        deployment_mode: incremental
+        state: present
+        ad_user: "{{ ad_username }}"
+        password: "{{ ad_password }}"
+        secret: "{{ secret }}"
+        tenant: "{{ tenant }}"
+        client_id: "{{ client_id }}"
+        subscription_id: "{{ subscriptionID }}"
+        resource_group_name: "{{ resource_group_name }}"
+        location: "{{ region }}"
+        deployment_name: "{{ item.value.name }}"
+        parameters:
+          subnetName:
+            value: masterSubnet
+          virtualNetworkName:
+            value: openshiftVnet
+          adminUsername:
+            value: "{{ adminUsername }}"
+          vmSize:
+            value: "{{ item.value.machinesize | default('Standard_D2_v2') }}"
+          adminPassword:
+            value: "{{ adminPassword }}"
+          image:
+            value: "{{ image }}"
+          masterKey:
+            value: "{{ masterkey }}"
+          tags:
+            value: "{{ item.value.tags }}"
+          vmName:
+            value: "{{ item.value.name }}"
+          sshKeyData:
+            value: "{{ sshkey }}"
+          availabilitySetName:
+            value: "masterAvailSet"
+          loadBalancer:
+            value: "apiPool"
+
+## ip address has to be created before hand  for some reason i cannot fathom at the mo
+          publicip:
+            value: "apipublicip"
+          internalLoadbalancerip:
+            value: "10.0.3.11"
+          dataDiskSize:
+            value: "{{ item.value.datadisksize | default('60') }}"
+          storageType:
+            value: "{{ item.value.storagtype | default('Standard_LRS') }}"
+        template_link: "{{ template_root | default('https://raw.githubusercontent.com/ivanthelad/ansible-azure/master/') }}/masters-avail.json"
+        #template_link: 'https://raw.githubusercontent.com/ivanthelad/ansible-azure/master/masters-avail.json'
+        #i#template_link: 'ansible-azure/nodes.json'
+      register: azuremasternodes_sync
+
+
+################################################
+#### Creating the infrastrucute nodes.
+####Todo, dyncamically add the list of infra nodes to group
+################################################
+    - name: Create infra Nodes Deploy
+      when: infranodes is defined
+      with_dict: "{{ infranodes }}"
+      async: 7200
+      poll: 0
+      azure_rm_deployment:
+        deployment_mode: incremental
+        state: present
+        ad_user: "{{ ad_username }}"
+        password: "{{ ad_password }}"
+        secret: "{{ secret }}"
+        tenant: "{{ tenant }}"
+        client_id: "{{ client_id }}"
+        subscription_id: "{{ subscriptionID }}"
+        resource_group_name: "{{ resource_group_name }}"
+        location: "{{ region }}"
+        deployment_name: "{{ item.value.name }}"
+        parameters:
+          subnetName:
+            value: infranodeSubnet
+          virtualNetworkName:
+            value: openshiftVnet
+          adminUsername:
+            value: "{{ adminUsername }}"
+          vmSize:
+            value: "{{ item.value.machinesize | default('Standard_D2_v2') }}"
+          adminPassword:
+            value: "{{ adminPassword }}"
+          image:
+            value: "{{ image }}"
+          masterKey:
+            value: "{{ masterkey }}"
+          tags:
+            value: "{{ item.value.tags }}"
+          vmName:
+            value: "{{ item.value.name }}"
+          sshKeyData:
+            value: "{{ sshkey }}"
+          availabilitySetName:
+            value: "infranodeavailSet"
+          loadBalancer:
+            value: "router"
+
+            ## ip address has to be created before hand  for some reason i cannot fathom at the mo
+          publicip:
+            value: "routerip"
+          dataDiskSize:
+            value: "{{ item.value.datadisksize | default('60') }}"
+          storageType:
+            value: "{{ item.value.storagtype | default('Standard_LRS') }}"
+        template_link: "{{ template_root | default('https://raw.githubusercontent.com/ivanthelad/ansible-azure/master/') }}/infranode-avail.json"
+        #template_link: 'https://raw.githubusercontent.com/ivanthelad/ansible-azure/master/infranode-avail.json'
+        #i#template_link: 'ansible-azure/nodes.json'
+      register: azureinfranodes_async
+
+
+################################################
+#### Creating the application nodes.
+####Todo, dyncamically add the list of infra nodes to group
+################################################
+    - name: Create Nodes Deploy
+      async: 7200
+      poll: 0
+      when: nodes is defined
+      with_dict: "{{ nodes }}"
+      azure_rm_deployment:
+        ad_user: "{{ ad_username }}"
+        password: "{{ ad_password }}"
+        secret: "{{ secret }}"
+        tenant: "{{ tenant }}"
+        client_id: "{{ client_id }}"
+        subscription_id: "{{ subscriptionID }}"
+        deployment_mode: incremental
+        state: present
+        resource_group_name: "{{ resource_group_name }}"
+        location: "{{ region }}"
+        deployment_name: "{{ item.value.name }}"
+        parameters:
+          subnetName:
+            value: nodeSubnet
+          virtualNetworkName:
+            value: openshiftVnet
+          adminUsername:
+            value: "{{ adminUsername }}"
+          vmSize:
+            value: "{{ item.value.machinesize | default('Standard_D2_v2') }}"
+          adminPassword:
+            value: "{{ adminPassword }}"
+          image:
+            value: "{{ image }}"
+          masterKey:
+            value: "{{ masterkey }}"
+          tags:
+            value: "{{ item.value.tags }}"
+          vmName:
+            value: "{{ item.value.name }}"
+          sshKeyData:
+            value: "{{ sshkey }}"
+          availabilitySetName:
+            value: "nodeAvailSet"
+          dataDiskSize:
+            value: "{{ item.value.datadisksize | default('60') }}"
+          storageType:
+            value: "{{ item.value.storagtype | default('Standard_LRS') }}"
+ ## simple nodes
+        template_link: "{{ template_root | default('https://raw.githubusercontent.com/ivanthelad/ansible-azure/master/') }}/nodes-avail.json"
+        #template_link: 'https://raw.githubusercontent.com/ivanthelad/ansible-azure/master/nodes-avail.json'
+        #i#template_link: 'ansible-azure/nodes.json'
+      register: azurenodes_async
+
+################################################
+#### Creating the storage nodes.
+#### Todo, dyncamically add the list of infra nodes to group
+################################################
+    - name: Create Storage Nodes Deploy
+      async: 7200
+      poll: 0
+      when: storage is defined
+      with_dict: "{{ storage }}"
+      azure_rm_deployment:
+        ad_user: "{{ ad_username }}"
+        password: "{{ ad_password }}"
+        secret: "{{ secret }}"
+        tenant: "{{ tenant }}"
+        client_id: "{{ client_id }}"
+        subscription_id: "{{ subscriptionID }}"
+        deployment_mode: incremental
+        state: present
+        resource_group_name: "{{ resource_group_name }}"
+        location: "{{ region }}"
+        deployment_name: "{{ item.value.name }}"
+        parameters:
+          subnetName:
+            value: nodeSubnet
+          virtualNetworkName:
+            value: openshiftVnet
+          adminUsername:
+            value: "{{ adminUsername }}"
+          vmSize:
+            value: "{{ item.value.machinesize | default('Standard_DS3_v2') }}"
+          adminPassword:
+            value: "{{ adminPassword }}"
+          image:
+            value: "{{ image }}"
+          masterKey:
+            value: "{{ masterkey }}"
+          tags:
+            value: "{{ item.value.tags }}"
+          vmName:
+            value: "{{ item.value.name }}"
+          sshKeyData:
+            value: "{{ sshkey }}"
+          availabilitySetName:
+            value: "nodeAvailSet"
+          dataDiskSize:
+            value: "{{ item.value.datadisksize | default('60') }}"
+          storageType:
+            value: "{{ item.value.storagtype | default('Standard_LRS') }}"
+ ## simple nodes
+        template_link: "{{ template_root | default('https://raw.githubusercontent.com/ivanthelad/ansible-azure/master/') }}/storage-avail.json"
+        #template_link: 'https://raw.githubusercontent.com/ivanthelad/ansible-azure/master/nodes-avail.json'
+        #i#template_link: 'ansible-azure/nodes.json'
+      register: azurestoragenodes_async
+
+
+
+### wait for masters
+    - name: Wait for master instance creation to complete
+      async_status: jid={{ item.ansible_job_id }}
+      register: azuremasternodes
+      when: masters
+      until: azuremasternodes.finished
+      retries: 900
+      with_items: "{{ azuremasternodes_sync.results }}"
+
+## wait for infra nodes
+    - name: Wait for infranode instance creation to complete
+      async_status: jid={{ item.ansible_job_id }}
+      register: azureinfranodes
+      when: infranodes is defined
+      until: azureinfranodes.finished
+      retries: 900
+      with_items: "{{ azureinfranodes_async.results }}"
+
+### wait for nodes
+    - name: Wait for nodes instance creation to complete
+      async_status: jid={{ item.ansible_job_id }}
+      register: azurenodes
+      when: nodes is defined
+      until: azurenodes.finished
+      retries: 900
+      with_items: "{{ azurenodes_async.results }}"
+
+### wait for nodes
+    - name: Wait for storage nodes instance creation to complete
+      async_status: jid={{ item.ansible_job_id }}
+      when: storage is defined
+      register: azurestoragenodes
+      until: azurestoragenodes.finished
+      retries: 900
+      with_items: "{{ azurestoragenodes_async.results | default([]) }}"
+
+    - debug: msg="the value of (MASTERS)azuremasternodes {{ azuremasternodes }}"
+    - debug: msg="the value of (NODES)azurenodes {{ azurenodes }}"
+    - debug: msg="the value of (STORAGE NODES)azurestoragenodes {{ azurestoragenodes | default([]) }}"
+      when: storage is defined
+    - debug: msg="the value of (INFRA)azureinfranodes {{ azureinfranodes }}"
+- hosts: localhost
+  connection: localhost
+  roles:
+#     - { role: tagvm, machines: "{{ masters }}" }
+#     - { role: tagvm, machines: "{{ nodes }}" }
+#     - { role: tagvm, machines: "{{ storage }}" }
+#     - { role: tagvm, machines: "{{ infranodes }}" }
+     - { role: generateinventory }
+
+################################################
+#### This is kinda messy, Whi„le you can technially jump onto the jump machine and  call ansible playbook
+####    ---  /bin/ansible-playbook /usr/share/ansible/openshift-ansible/playbooks/byo/config.yml
+####  In this case i'm using to jump host as a 'gatewayed' ansible proxy. basically proxying my ansible commands via the jump host.
+#### To do this seamlessly the local machine requires the hosts to be added to know hosts
+#### This the funky stuff that going on below... ohh forgive me
+####
+################################################
+- hosts: azure_vms
+  user: "{{ adminUsername }}"
+  tasks:
+
+    - debug: msg="Waiting a min and a half, to ensure ports are all up on nodes"
+    - command: "sleep 110"
+## From the jumphost scan the keys for all app nodes  and print to file
+    - name: From the jumphost scan the keys for all app nodes  and print to file
+      shell: "ssh-keyscan -H -T 10  {{ item.value.name }} >> /home/{{ adminUsername }}/.ssh/known_hosts "
+      with_dict: "{{ nodes }}"
+## From the jumphost fetch the keys for all app nodes  and save locally
+    - name: From the jumphost fetch the keys for all app nodes  and save locally
+      fetch: src=/home/{{ adminUsername }}/.ssh/known_hosts  dest=/tmp/{{ item.value.name }}_knownhosts flat=yes
+      with_dict: "{{ nodes }}"
+
+## From the jumphost scan the keys for all app nodes  and print to file
+    - name: From the jumphost scan the keys for all storage nodes  and print to file
+      shell: "ssh-keyscan -H -T 10  {{ item.value.name }} >> /home/{{ adminUsername }}/.ssh/known_hosts "
+      with_dict: "{{ storage | default({})}}"
+      when: storage is defined
+
+## From the jumphost fetch the keys for all app nodes  and save locally
+    - name: From the jumphost fetch the keys for all storage nodes  and save locally
+      fetch: src=/home/{{ adminUsername }}/.ssh/known_hosts  dest=/tmp/{{ item.value.name }}_knownhosts flat=yes
+      with_dict: "{{ storage | default({})}}"
+      when: storage is defined
+
+## From the jumphost scan the keys for all infranodes  and print to file
+    - name:  From the jumphost scan the keys for all infranodes  and print to file
+      shell: "ssh-keyscan -H -T 10  {{ item.value.name }} >> /home/{{ adminUsername }}/.ssh/known_hosts "
+      with_dict: "{{ infranodes }}"
+## From the jumphost fetch the keys for all infra nodes  and save locally
+    - name: From the jumphost fetch the keys for all infra nodes  and save locally
+      fetch: src=/home/{{ adminUsername }}/.ssh/known_hosts  dest=/tmp/{{ item.value.name }}_knownhosts flat=yes
+      with_dict: "{{ infranodes }}"
+
+## From the jumphost scan the keys for all masters  and print to file
+    - name: From the jumphost scan the keys for all masters  and print to file
+      shell: "ssh-keyscan -H -T 10  {{ item.value.name }} >> /home/{{ adminUsername }}/.ssh/known_hosts "
+      with_dict: "{{ masters }}"
+## From the jumphost fetch the keys for all master nodes  and save locally
+    - name:  From the jumphost fetch the keys for all master nodes  and save locally
+      fetch: src=/home/{{ adminUsername }}/.ssh/known_hosts  dest=/tmp/{{ item.value.name }}_knownhosts flat=yes
+      with_dict: "{{ masters }}"
+
+## From the jumphost scan the keys for all jumphost  and print to file
+    - name: From the jumphost scan the keys for all jumphost  and print to file
+      shell: "ssh-keyscan -H -T 10  {{ item.value.name }} >> /home/{{ adminUsername }}/.ssh/known_hosts "
+      with_dict: "{{ jumphost }}"
+## From the jumphost fetch the keys for all jumphost nodes  and save locally
+    - name:  From the jumphost fetch the keys for all jumphost nodes  and save locally
+      fetch: src=/home/{{ adminUsername }}/.ssh/known_hosts  dest=/tmp/{{ item.value.name }}_knownhosts flat=yes
+      with_dict: "{{ jumphost }}"
+
+#################################################
+ #### This is kinda messy, I'm appending all known hosts to local file. We fetched these in the previous step
+################################################
+- hosts: localhost
+  connection: local
+  tasks:
+    - name: Assemble nodes knownhosts locally
+      shell : "cat /tmp/{{ item.value.name }}_knownhosts >> ~/.ssh/known_hosts "
+      with_dict: "{{ nodes }}"
+    - name: Assemble storage nodes knownhosts locally
+      shell : "cat /tmp/{{ item.value.name }}_knownhosts >> ~/.ssh/known_hosts "
+      with_dict: "{{ storage | default({})}}"
+      when: storage is defined
+    - name:  Assemble masters knownhosts locally
+      shell : "cat /tmp/{{ item.value.name }}_knownhosts >> ~/.ssh/known_hosts "
+      with_dict: "{{ masters }}"
+    - name:  Assemble infranodes knownhosts locally
+      shell : "cat /tmp/{{ item.value.name }}_knownhosts >> ~/.ssh/known_hosts "
+      with_dict: "{{ infranodes }}"
+    - name:  Assemble jumphost knownhosts locally
+      shell : "cat /tmp/{{ item.value.name }}_knownhosts >> ~/.ssh/known_hosts "
+      with_dict: "{{ jumphost }}"

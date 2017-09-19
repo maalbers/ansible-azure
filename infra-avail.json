@@ -1,0 +1,156 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+  "dnsNameAPI": {
+      "type": "string"
+    }
+
+
+  },
+  "variables": {
+    "location": "[resourceGroup().location]",
+    "LoadBalancer-nameAPI": "apiLB",
+    "LoadBalancer-nameRouter": "routerLB",
+    "backend-address-pool-nameAPI": "apiPool",
+    "backend-address-pool-nameRouter": "routerPool",
+    "PublicIP-nameAPI": "API-Public-IP",
+    "PublicIP-nameRouter": "Router-Public-IP",
+    "virtualNetworkName": "openshiftVnet",
+    "addressPrefix": "10.0.0.0/16",
+    "infranodesubnetName": "infranodeSubnet",
+    "infranodesubnetPrefix": "10.0.2.0/24",
+    "nodesubnetName": "nodeSubnet",
+    "nodesubnetPrefix": "10.0.1.0/24",
+    "mastersubnetName": "masterSubnet",
+    "mastersubnetPrefix": "10.0.3.0/24",
+    "apiVersion": "2015-06-15",
+
+
+    "master-AvailSet": "masterAvailSet",
+    "infranode-AvailSet": "infranodeAvailSet",
+    "node-AvailSet": "nodeAvailSet",
+
+    "vhdStorageType": "Standard_LRS",
+    "vnetId": "[resourceId('Microsoft.Network/virtualNetworks', variables('virtualNetworkName'))]",
+    "infranodeSubnetRef": "[concat(variables('vnetId'), '/subnets/', variables('infranodesubnetName'))]",
+    "nodeSubnetRef": "[concat(variables('vnetId'), '/subnets/', variables('nodesubnetName'))]",
+    "masterSubnetRef": "[concat(variables('vnetId'), '/subnets/', variables('mastersubnetName'))]",
+    "centos": {
+      "publisher": "Openlogic",
+      "offer": "CentOS",
+      "sku": "7.2",
+      "version": "latest"
+    },
+    "rhel": {
+      "publisher": "RedHat",
+      "offer": "RHEL",
+      "sku": "7.2",
+      "version": "latest"
+    }
+  },
+  "resources": [
+
+
+    {
+      "apiVersion": "[variables('apiVersion')]",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "name": "apipublicip",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "PublicIPAddress"
+      },
+      "properties": {
+        "publicIPAllocationMethod": "Static",
+        "dnsSettings": {
+          "domainNameLabel": "[parameters('dnsNameAPI')]"
+        }
+      }
+
+    }
+,
+    {
+      "apiVersion": "[variables('apiVersion')]",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "name": "jumphostip",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "PublicIPAddress"
+      },
+      "properties": {
+        "publicIPAllocationMethod": "Static"
+      }
+
+    },
+    {
+      "apiVersion": "[variables('apiVersion')]",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "name": "routerip",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "PublicIPAddress"
+      },
+      "properties": {
+        "publicIPAllocationMethod": "Static"
+      }
+
+    },
+    {
+      "apiVersion": "[variables('apiVersion')]",
+      "type": "Microsoft.Network/virtualNetworks",
+      "name": "[variables('virtualNetworkName')]",
+      "location": "[variables('location')]",
+      "tags": {
+        "displayName": "VirtualNetwork"
+      },
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[variables('addressPrefix')]"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "[variables('infranodesubnetName')]",
+            "properties": {
+              "addressPrefix": "[variables('infranodesubnetPrefix')]"
+            }
+          },
+          {
+            "name": "[variables('nodesubnetName')]",
+            "properties": {
+              "addressPrefix": "[variables('nodesubnetPrefix')]"
+            }
+          },
+          {
+            "name": "[variables('mastersubnetName')]",
+            "properties": {
+              "addressPrefix": "[variables('mastersubnetPrefix')]"
+            }
+          }
+        ]
+      }
+    }
+
+
+  ],
+
+  "outputs": {
+    "apidns": {
+      "type": "string",
+      "value": "[reference('apipublicip').dnsSettings.fqdn]"
+    },
+    "apiip": {
+      "type": "string",
+      "value": "[reference('apipublicip').ipAddress]"
+    },
+    "jumphostip": {
+      "type": "string",
+      "value": "[reference('jumphostip').ipAddress]"
+    },
+    "routerip": {
+      "type": "string",
+      "value": "[reference('routerip').ipAddress]"
+    }
+  }
+}

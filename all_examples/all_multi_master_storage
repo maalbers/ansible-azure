@@ -1,0 +1,198 @@
+#---
+### This example is a multi master with 2 infra nodes and 2 app nodes.
+openshiftversion: 3.4
+openshiftorigin: false
+resource_group_name: pirates
+##  Azure AD user.
+ad_username: XXXXXXXXXXXXXXXXXXX
+### Azure AD password
+ad_password: XXXXXXXXXXXXXXXXXXX
+client_id: "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+secret: "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+tenant: "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+principal: "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+#resource_group_name: oscp
+#### Azure Subscription ID
+subscriptionID: "XXXXXXXXXXXXXXXXXXX"
+## user to login to the jump host. this user will only be created on the jumphost
+adminUsername: ivan
+## user pwd for jump host
+## Password for the jump host
+adminPassword: XXx_please_change_me_xXX
+##### Public key for jump host
+sshkey: ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDCdC20wMbD9vmCPDD6VP6u3eYHCznqKOm+aPZi3EgUZIM7r91X7MFzuVS5U6gHXnOa4m7yh26zceh68T6FqIKby1WAGTShLFDCU6czEe0Pa5yMAV6Q4dQ34HyioTIu4HmXi4504ZxneLNJP2AHc+eJkV0ANcXIHSqoaleVyWt7HLNltFNO349GZMj01TSchBYzqZpYqSGIDsTIXwF6+/NosMLfmg6WF0J4M7A34Gn/YTXD8r2oWeSs3O+MdTMH2Zdt4j9Q8MPCgic6xDPiONpCvEdt5pkzrwaK9ZJEV4wZsV7CSy+5a+poOl/a/5F+Mj3Fc2IRJiDkScuV07qWthKH
+
+
+### can also be centos
+image: "rhel"
+# see https://azure.microsoft.com/en-us/documentation/articles/cloud-services-sizes-specs/
+### Size for the master
+master_vmSize: Standard_DS3_v2
+#master_vmSize: Standard_D2_v2
+#master_vmSize: Standard_D1_v2
+
+### Size for the nodes
+node_vmSize: Standard_DS3_v2
+#node_vmSize: Standard_D2_v2
+#node_vmSize: Standard_D1_v2
+
+#### Region to deploy in
+region: northeurope
+
+## docker info
+docker_storage_device: /dev/sdc
+create_vgname: docker_vg
+filesystem: 'xfs'
+create_lvsize: '80%FREE'
+#create_lvsize: '2g'
+
+#### For Gluster storage ####
+install_storage: true
+storage_disks:
+  - 128
+storage_user_key: glusteruser
+storage_admin_key: glusteruser
+storage_api_user: admin
+
+#### For RHMAP storage ####
+install_rhmap: false
+
+#### For Red Hat SSO ####
+install_sso: false
+
+
+#### subscription information
+rh_subcription_user: XXXXXXXXXXX
+rh_subcription_pass: XXXXXXXXXXX
+openshift_pool_id: XXXXXXXXXXX
+storage_pool_id: XXXXXX
+
+########### list of node  ###########
+### 1,3 or 5 masters nodes       ####
+### 3,5 or 7 storage nodes       ####
+### 1+ infra nodes               ####
+### 1+ app nodes                 ####
+#####################################
+
+jumphost:
+  jumphost1:
+    name: jumphost1
+    datadisksize: 64
+    machinesize: Standard_D1_v2
+    storagtype: Standard_LRS
+    tags:
+      region: "{{ region }}"
+      zone: jumphost
+      stage: jumphost
+      type: jumphost
+
+masters:
+  master1:
+    name: master1
+    datadisksize: 80
+    machinesize: Standard_DS3_v2
+    storagtype: Premium_LRS
+    tags:
+      region: "{{ region }}"
+      zone: zone1
+      type: infra
+  master2:
+    name: master2
+    datadisksize: 80
+    machinesize: Standard_DS3_v2
+    storagtype: Premium_LRS
+    tags:
+      region: "{{ region }}"
+      zone: infra
+      type: infra
+  master3:
+    name: master3
+    datadisksize: 80
+    machinesize: Standard_DS3_v2
+    storagtype: Premium_LRS
+    tags:
+      region: "{{ region }}"
+      zone: infra
+      type: infra
+
+infranodes:
+  infranode1:
+    name: infranode1
+    datadisksize: 80
+    machinesize: Standard_DS3_v2
+    storagtype: Premium_LRS
+    tags:
+      region: "{{ region }}"
+      zone: zone1
+      infra: "true"
+      registry: true
+      router: true
+  infranode2:
+    name: infranode2
+    datadisksize: 80
+    machinesize: Standard_DS3_v2
+    storagtype: Premium_LRS
+    tags:
+      region: "{{ region }}"
+      zone: zone2
+      infra: "true"
+      router: true
+nodes:
+  node1:
+    name: node1
+    datadisksize: 80
+    machinesize: Standard_DS3_v2
+    storagtype: Premium_LRS
+    tags:
+      region: "{{ region }}"
+      zone: zone1
+      infra: "false"
+      stage: dev
+
+  node2:
+    name: node2
+    datadisksize: 80
+    machinesize: Standard_DS3_v2
+    storagtype: Premium_LRS
+    tags:
+      region: "{{ region }}"
+      zone: zone2
+      infra: "false"
+      stage: dev
+storage:
+  storage1:
+    name: storage1
+    datadisksize: 40
+    machinesize: Standard_DS3_v2
+    storagtype: Premium_LRS
+    storagedisksize: 256
+    tags:
+      region: "{{ region }}"
+      infra: "false"
+      stage: dev
+      type: storage
+      zone: 1
+  storage2:
+    name: storage2
+    datadisksize: 40
+    machinesize: Standard_DS3_v2
+    storagtype: Premium_LRS
+    storagedisksize: 256
+    tags:
+      region: "{{ region }}"
+      infra: "false"
+      stage: dev
+      type: storage
+      zone: 2
+  storage3:
+    name: storage3
+    datadisksize: 40
+    machinesize: Standard_DS3_v2
+    storagtype: Premium_LRS
+    storagedisksize: 256
+    tags:
+      region: "{{ region }}"
+      infra: "false"
+      stage: dev
+      type: storage
+      zone: 3

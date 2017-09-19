@@ -1,0 +1,94 @@
+
+# ## https://access.redhat.com/documentation/en/red-hat-mobile-application-platform/4.2/single/core-administration-and-installation-guide/
+### Creating PVS entries for RHMAP on premise deployments
+### The expectation is the nfs server has these entries already
+- hosts: gatewayed-masters:gatewayed-nodes
+  strategy: free
+  serial: 3
+  vars:
+    publicjumpdns: "{{ hostvars['localhost']['publicjumpdns']}}"
+    publicjumpip: "{{ hostvars['localhost']['publicjumpip']}}"
+    routerpublicip: "{{ hostvars['localhost']['routerpublicip']}}"
+    ansible_ssh_common_args: -o ProxyCommand="ssh -W %h:%p -q {{ adminUsername }}@{{ publicjumpip }}"
+
+  gather_facts: false
+  user: "{{ adminUsername }}"
+  sudo: true
+  roles:
+    - { role: rhmap_subscribe }
+- hosts: gatewayed-masters:gatewayed-nodes
+  strategy: free
+  vars:
+    publicjumpdns: "{{ hostvars['localhost']['publicjumpdns']}}"
+    publicjumpip: "{{ hostvars['localhost']['publicjumpip']}}"
+    routerpublicip: "{{ hostvars['localhost']['routerpublicip']}}"
+    ansible_ssh_common_args: -o ProxyCommand="ssh -W %h:%p -q {{ adminUsername }}@{{ publicjumpip }}"
+
+  gather_facts: false
+  user: "{{ adminUsername }}"
+  sudo: true
+  roles:
+    - { role: rhmap_prereqs }
+
+- hosts: gatewayed-nodes
+  strategy: free
+  serial: 50
+  gather_facts: false
+
+  vars:
+    publicjumpdns: "{{ hostvars['localhost']['publicjumpdns']}}"
+    publicjumpip: "{{ hostvars['localhost']['publicjumpip']}}"
+    routerpublicip: "{{ hostvars['localhost']['routerpublicip']}}"
+    ansible_ssh_common_args: -o ProxyCommand="ssh -W %h:%p -q {{ adminUsername }}@{{ publicjumpip }}"
+
+  gather_facts: false
+  user: "{{ adminUsername }}"
+  sudo: true
+  tasks:
+    - name: Prepulling rhmap images
+      command: docker pull {{item}}
+    #    docker:
+    #      name: myapplication
+    #      image: someuser/appimage
+    #      state: reloaded
+    #      pull: always
+      with_items:
+        - rhmap42/fh-aaa:latest
+        - rhmap42/fh-appstore:latest
+        - rhmap42/fh-messaging:latest
+        - rhmap42/fh-metrics:latest
+        - rhmap42/fh-ngui:latest
+        - rhmap42/fh-scm:latest
+        - rhmap42/fh-supercore:latest
+        - rhmap42/gitlab-shell:latest
+        - rhmap42/httpd:latest
+        - rhmap42/memcached:latest
+        - rhmap42/millicore:latest
+        - rhmap42/httpd:latest
+        - rhmap42/fh-sdks:latest
+        - rhmap42/mongodb:latest
+        - rhmap42/mysql:latest
+        - rhmap42/nagios:latest
+        - rhmap42/redis:latest
+        - rhmap42/ups-eap:latest
+- hosts: gatewayed-masters[0]
+  vars:
+    publicjumpip: "{{ hostvars['localhost']['publicjumpip']}}"
+    publicjumpdns: "{{ hostvars['localhost']['publicjumpdns']}}"
+    routerpublicip: "{{ hostvars['localhost']['routerpublicip']}}"
+    ansible_ssh_common_args: -o ProxyCommand="ssh -W %h:%p -q {{ adminUsername }}@{{ publicjumpip }}"
+  gather_facts: false
+  user: "{{ adminUsername }}"
+  sudo: true
+  roles:
+    - { role: rhmap_installtemplates }
+    - { role: rhmap_install }
+
+
+#  next step https://access.redhat.com/documentation/en/red-hat-mobile-application-platform/4.2/single/mbaas-administration-and-installation-guide/#manual-installation
+#
+
+
+
+
+#### Create

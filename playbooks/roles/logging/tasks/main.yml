@@ -1,0 +1,45 @@
+---
+
+- debug: msg="creating project logging"
+  tags: logging
+
+- name: Set the node-selector for the default namespace
+  shell: "oadm new-project logging --node-selector='' "
+  ignore_errors: true
+  tags: logging
+
+- name: Set the node-selector for the default namespace
+  shell: "oc new-app logging-deployer-account-template -n logging"
+  ignore_errors: true
+  tags: logging
+
+- name: Set the node-selector for the default namespace
+  shell: "oadm policy add-cluster-role-to-user oauth-editor system:serviceaccount:logging:logging-deployer -n logging"
+  ignore_errors: true
+  tags: logging
+
+- name: Set the node-selector for the default namespace
+  shell: " oadm policy add-scc-to-user privileged  system:serviceaccount:logging:aggregated-logging-fluentd -n logging"
+  ignore_errors: true
+  tags: logging
+
+- name: Set the node-selector for the default namespace
+  shell: "oadm policy add-cluster-role-to-user cluster-reader  system:serviceaccount:logging:aggregated-logging-fluentd -n logging"
+  ignore_errors: true
+  tags: logging
+- name: Set the node-selector for the default namespace
+  shell: "oadm policy add-cluster-role-to-user rolebinding-reader    system:serviceaccount:logging:aggregated-logging-elasticsearch  -n logging"
+  ignore_errors: true
+  tags: logging
+
+- name: create config map
+  #shell: "oc create configmap logging-deployer  --from-literal kibana-hostname=logging.{{ routerpublicip }}.xip.io --from-literal public-master-url=https://{{ publicjumpdns }}  --from-literal es-cluster-size=1 --from-literal es-instance-ram=4G  --from-literal es-pvc-size=10G -n logging"
+  shell: "oc create configmap logging-deployer  --from-literal kibana-hostname={{ kibana_hostname }} --from-literal public-master-url={{ public_master_url }}  --from-literal es-cluster-size=1 --from-literal es-instance-ram=4G  --from-literal es-pvc-size=10G -n logging"
+
+  tags: logging
+- name: Set the node-selector for the default namespace
+  shell: " oc label node --all logging-infra-fluentd=true --overwrite=true "
+  tags: logging
+- name: Set the node-selector for the default namespace
+  shell: " oc new-app logging-deployer-template  --param IMAGE_VERSION=latest -n logging "
+  tags: logging

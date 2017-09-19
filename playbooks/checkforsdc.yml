@@ -1,0 +1,26 @@
+
+
+- hosts: gatewayed-nodes
+  user: "{{ adminUsername }}"
+  sudo: true
+  vars:
+    publicjumpdns: "{{ hostvars['localhost']['publicjumpdns']}}"
+    publicjumpip: "{{ hostvars['localhost']['publicjumpip']}}"
+    routerpublicip: "{{ hostvars['localhost']['routerpublicip']}}"
+    ansible_ssh_common_args: -o ProxyCommand="ssh -W %h:%p -q {{ adminUsername }}@{{ publicjumpip }}"
+    docker_storage_device: "/dev/sdc"
+
+  name: test play
+  tasks:
+
+      - shell: findmnt -no SOURCE
+        register: sdccheck
+
+      - debug: msg="The /dev/sdc is already in use. This is because microsoft has the /mnt/resource temp directory  which ordinarly should be using the device /dev/sdb sometimes can be mounted under  /dev/sdc  "
+        when: sdccheck.stdout.find('sdc') != -1
+
+      - set_fact:
+          docker_storage_device: "/dev/sdb"
+        when: sdccheck.stdout.find('sdc') != -1
+
+      - debug: msg="Ok new device set, docker_storage_device={{docker_storage_device}}"
