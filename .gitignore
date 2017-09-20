@@ -1,8 +1,5 @@
 ./inventory
 group_vars/all
 playbooks/inventory
-ansible-azure.iml
-.idea/
 inventory.*
-*.retry
 *.DS_Store
