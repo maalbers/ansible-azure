@@ -5,6 +5,9 @@
     "vmName": {
       "type": "string"
     },
+    "vmIP": {
+      "type": "string"
+    },
     "tags": {
       "type": "object",
       "defaultValue": {
@@ -118,7 +121,7 @@
           {
             "name": "ipconfig1",
             "properties": {
-              "privateIPAddress": "10.0.3.4",
+              "privateIPAddress": "[parameters('vmIP')]",
               "privateIPAllocationMethod": "Static",
               "publicIPAddress": {
                 "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('PublicIP-name'))]"
