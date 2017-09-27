@@ -8,6 +8,7 @@ Installation is done with Docker container and environmental variables that are 
 * Enough quota for cores (by default 10 cores )
 * Red Hat account and Openshift Enterprise subscription
 * Docker
+* 
 
 ## Sample ALL config
 The following configs are required
