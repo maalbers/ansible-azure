@@ -3,19 +3,19 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
 
-  
-  
+
+
   },
   "variables": {
     "location": "[resourceGroup().location]",
     "virtualNetworkName": "openshiftVnet",
-    "addressPrefix": "10.0.0.0/16",
+    "addressPrefix": "10.203.0.0/16",
     "infranodesubnetName": "infranodeSubnet",
-    "infranodesubnetPrefix": "10.0.2.0/24",
+    "infranodesubnetPrefix": "10.203.70.0/24",
     "nodesubnetName": "nodeSubnet",
-    "nodesubnetPrefix": "10.0.1.0/24",
+    "nodesubnetPrefix": "10.203.60.0/24",
     "mastersubnetName": "masterSubnet",
-    "mastersubnetPrefix": "10.0.0.0/24",
+    "mastersubnetPrefix": "10.203.20.0/24",
     "apiVersion": "2015-06-15",
     "vhdStorageType": "Standard_LRS",
     "vnetId": "[resourceId('Microsoft.Network/virtualNetworks', variables('virtualNetworkName'))]",
@@ -33,10 +33,10 @@
       "offer": "RHEL",
       "sku": "7.2",
       "version": "latest"
-    }  
+    }
   },
   "resources": [
-  
+
     {
       "apiVersion": "[variables('apiVersion')]",
       "type": "Microsoft.Network/virtualNetworks",
@@ -73,7 +73,7 @@
         ]
       }
     }
- 
-   
+
+
   ]
 }
