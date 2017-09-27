@@ -17,13 +17,13 @@
     "PublicIP-nameAPI": "API-Public-IP",
     "PublicIP-nameRouter": "Router-Public-IP",
     "virtualNetworkName": "openshiftVnet",
-    "addressPrefix": "10.0.0.0/16",
+    "addressPrefix": "10.203.0.0/16",
     "infranodesubnetName": "infranodeSubnet",
-    "infranodesubnetPrefix": "10.0.2.0/24",
+    "infranodesubnetPrefix": "10.203.70.0/24",
     "nodesubnetName": "nodeSubnet",
-    "nodesubnetPrefix": "10.0.1.0/24",
+    "nodesubnetPrefix": "10.203.60.0/24",
     "mastersubnetName": "masterSubnet",
-    "mastersubnetPrefix": "10.0.3.0/24",
+    "mastersubnetPrefix": "10.203.20.0/24",
     "apiVersion": "2015-06-15",
 
 
